@@ -20,13 +20,13 @@ import sys
 from typing import TYPE_CHECKING
 
 # pylint: disable=line-too-long
+from libcloudforensics.providers.gcp import forensics
 from libcloudforensics.providers.gcp.internal import compute as gcp_compute
 from libcloudforensics.providers.gcp.internal import log as gcp_log
 from libcloudforensics.providers.gcp.internal import monitoring as gcp_monitoring
 from libcloudforensics.providers.gcp.internal import project as gcp_project
 from libcloudforensics.providers.gcp.internal import storage as gcp_storage
-from libcloudforensics.providers.gcp import forensics
-from libcloudforensics import logging_utils
+from libcloudforensics import errors, logging_utils
 # pylint: enable=line-too-long
 
 logging_utils.SetUpLogger(__name__)
@@ -84,6 +84,45 @@ def CreateDiskCopy(args: 'argparse.Namespace') -> None:
 
   logger.info('Disk copy completed.')
   logger.info('Name: {0:s}'.format(disk.name))
+
+
+def ExportDisksToGCS(args: 'argparse.Namespace') -> None:
+  """Copy all the disks from a GCE instance to a GCS bucket.
+
+  Args:
+    args (argparse.Namespace): Arguments from ArgumentParser.
+  """
+  compute_client = gcp_compute.GoogleCloudCompute(args.project)
+  gcs = gcp_storage.GoogleCloudStorage(args.project)
+
+  if not args.path.startswith('gs://'):
+    args.path = 'gs://' + args.path
+
+  logger.warning('You must enable the following APIs:')
+  logger.warning(
+      'https://cloud.google.com/compute/docs/images/export-image#enable-cloud-build'  # pylint: disable=line-too-long
+  )
+
+  try:
+    bucket = gcs.CreateBucket(args.path, labels={'created_by': 'cfu'})
+  except errors.ResourceCreationError as exception:
+    if 'already exists' in exception.message:
+      logger.info('Target bucket already exists. Reusing.')
+      bucket = args.path
+    else:
+      sys.exit(str(exception))
+  logger.info('Retrieving instance')
+  instance = compute_client.GetInstance(instance_name=args.instance_name)
+  logger.info('Listing disks')
+  disks = instance.ListDisks()
+  for d in disks.values():
+    logger.info('Processing disk: {0:s}'.format(d.name))
+    i = compute_client.CreateImageFromDisk(d)
+    logger.info(
+        'Image created from disk: {0:s}. Exporting to GCS.'.format(i.name))
+    i.ExportImage(bucket)
+    logger.info("Deleting image.")
+    i.Delete()
 
 
 def DeleteInstance(args: 'argparse.Namespace') -> None:
@@ -330,6 +369,7 @@ def InstanceNetworkQuarantine(args: 'argparse.Namespace') -> None:
       return
   forensics.InstanceNetworkQuarantine(args.project,
       args.instance_name, exempted_ips, args.enable_logging )
+
 
 def VMRemoveServiceAccount(args: 'argparse.Namespace') -> None:
   """Removes an attached service account from a VM instance.

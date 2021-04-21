@@ -270,6 +270,8 @@ class GoogleCloudStorage:
     Raises:
       ResourceCreationError: If the bucket could not be created.
     """
+    if bucket.startswith('gs://'):
+      bucket = bucket[5:]
     gcs_buckets = self.GcsApi().buckets()
     body = {'name': bucket, 'labels': labels}
     request = gcs_buckets.insert(
