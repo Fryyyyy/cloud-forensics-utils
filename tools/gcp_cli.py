@@ -102,6 +102,9 @@ def ExportDisksToGCS(args: 'argparse.Namespace') -> None:
   logger.warning(
       'https://cloud.google.com/compute/docs/images/export-image#enable-cloud-build'  # pylint: disable=line-too-long
   )
+  logger.warning(
+      'The Cloud Build will leave a bucket full of artifacts that should be deleted (including a compressed export of the disks).'  # pylint: disable=line-too-long
+  )
 
   try:
     bucket = gcs.CreateBucket(args.path, labels={'created_by': 'cfu'})
@@ -121,7 +124,7 @@ def ExportDisksToGCS(args: 'argparse.Namespace') -> None:
     logger.info(
         'Image created from disk: {0:s}. Exporting to GCS.'.format(i.name))
     i.ExportImage(bucket)
-    logger.info("Deleting image.")
+    logger.info('Deleting image.')
     i.Delete()
 
 
