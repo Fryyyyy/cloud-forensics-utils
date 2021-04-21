@@ -17,6 +17,10 @@
 import collections
 import datetime
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Tuple
+
+from googleapiclient.errors import HttpError
+
+from libcloudforensics import errors
 from libcloudforensics.providers.gcp.internal import common
 # pylint: disable=line-too-long
 from libcloudforensics.providers.gcp.internal import monitoring as gcp_monitoring
@@ -262,6 +266,9 @@ class GoogleCloudStorage:
     Returns:
       Dict: An API operation object for a Google Cloud Storage bucket.
            https://cloud.google.com/storage/docs/json_api/v1/buckets#resource
+
+    Raises:
+      ResourceCreationError: If the bucket could not be created.
     """
     gcs_buckets = self.GcsApi().buckets()
     body = {'name': bucket, 'labels': labels}
@@ -270,5 +277,14 @@ class GoogleCloudStorage:
         predefinedAcl=predefinedacl,
         predefinedDefaultObjectAcl=predefineddefaultobjectacl,
         body=body)
-    response = request.execute()  # type: Dict[str, Any]
+    try:
+      response = request.execute()  # type: Dict[str, Any]
+    except HttpError as exception:
+      if exception.resp.status == 409:
+        raise errors.ResourceCreationError(
+            'Bucket {0:s} already exists: {1!s}'.format(bucket, exception),
+            __name__) from exception
+      raise errors.ResourceCreationError(
+          'Unknown error occurred when creating bucket:'
+          ' {0!s}'.format(exception), __name__) from exception
     return response
