@@ -16,11 +16,14 @@
 
 from datetime import datetime
 import json
+import shutil
+import subprocess
 import sys
 from typing import TYPE_CHECKING
 
 # pylint: disable=line-too-long
 from libcloudforensics.providers.gcp import forensics
+from libcloudforensics.providers.gcp.internal import common
 from libcloudforensics.providers.gcp.internal import compute as gcp_compute
 from libcloudforensics.providers.gcp.internal import log as gcp_log
 from libcloudforensics.providers.gcp.internal import monitoring as gcp_monitoring
@@ -86,8 +89,8 @@ def CreateDiskCopy(args: 'argparse.Namespace') -> None:
   logger.info('Name: {0:s}'.format(disk.name))
 
 
-def ExportDisksToGCS(args: 'argparse.Namespace') -> None:
-  """Copy all the disks from a GCE instance to a GCS bucket.
+def ExportDisksToBucket(args: 'argparse.Namespace') -> None:
+  """Copy all the disks from a GCE instance to a Storage bucket.
 
   Args:
     args (argparse.Namespace): Arguments from ArgumentParser.
@@ -95,19 +98,30 @@ def ExportDisksToGCS(args: 'argparse.Namespace') -> None:
   compute_client = gcp_compute.GoogleCloudCompute(args.project)
   gcs = gcp_storage.GoogleCloudStorage(args.project)
 
-  if not args.path.startswith('gs://'):
-    args.path = 'gs://' + args.path
+  s3_dest = None
+  gsutil = None
+  if not (args.path.startswith('gs://') or args.path.startswith('s3://')):
+    sys.exit('Destination bucket path must start with gs:// or s3://')
+  if args.path.startswith('s3://'):
+    s3_dest = args.path
+    args.path = 'gs://' + common.GenerateUniqueInstanceName('transfer-from-cfu')
+    logger.info('Setting temporary bucket path to {0:s}'.format(args.path))
+    gsutil = shutil.which('gsutil')
+    if gsutil is None:
+      sys.exit('gsutil is required to copy files to S3')
 
   logger.warning('You must enable the following APIs:')
   logger.warning(
       'https://cloud.google.com/compute/docs/images/export-image#enable-cloud-build'  # pylint: disable=line-too-long
   )
+  # TODO(fryy): Automatically find and delete the Daisy bucket
   logger.warning(
       'The Cloud Build will leave a bucket full of artifacts that should be deleted (including a compressed export of the disks).'  # pylint: disable=line-too-long
   )
 
   try:
-    bucket = gcs.CreateBucket(args.path, labels={'created_by': 'cfu'})
+    logger.info('Creating bucket {0:s}'.format(args.path))
+    bucket = gcs.CreateBucket(args.path, labels={'created_by': 'cfu'}).get('name')
   except errors.ResourceCreationError as exception:
     if 'already exists' in exception.message:
       logger.info('Target bucket already exists. Reusing.')
@@ -123,9 +137,15 @@ def ExportDisksToGCS(args: 'argparse.Namespace') -> None:
     i = compute_client.CreateImageFromDisk(d)
     logger.info(
         'Image created from disk: {0:s}. Exporting to GCS.'.format(i.name))
-    i.ExportImage(bucket)
+    i.ExportImage('gs://' + bucket)
     logger.info('Deleting image.')
     i.Delete()
+    if s3_dest:
+      # TODO(fryy): Should this use STS instead?
+      command = [gsutil, '-m', 'rsync', args.path, s3_dest]
+      logger.info('Exporting image to S3 by running "{0:s}"'.format(" ".join(command)))
+      result = subprocess.run(command, capture_output=True, check=True)
+      logger.info(result)
 
 
 def DeleteInstance(args: 'argparse.Namespace') -> None:

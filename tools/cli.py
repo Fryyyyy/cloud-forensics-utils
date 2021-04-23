@@ -48,7 +48,7 @@ PROVIDER_TO_FUNC = {
         'creatediskgcs': gcp_cli.CreateDiskFromGCSImage,
         'deleteinstance': gcp_cli.DeleteInstance,
         'deleteobject': gcp_cli.DeleteObject,
-        'exportdiskstogcs': gcp_cli.ExportDisksToGCS,
+        'exportdiskstobucket': gcp_cli.ExportDisksToBucket,
         'listbuckets': gcp_cli.ListBuckets,
         'listdisks': gcp_cli.ListDisks,
         'listinstances': gcp_cli.ListInstances,
@@ -295,8 +295,8 @@ def Main() -> None:
             'List GCE instances in GCP project.')
   AddParser('gcp', gcp_subparsers, 'listdisks',
             'List GCE disks in GCP project.')
-  AddParser('gcp', gcp_subparsers, 'exportdiskstogcs',
-            'Export the disks from a GCE instance to a GCS bucket.',
+  AddParser('gcp', gcp_subparsers, 'exportdiskstobucket',
+            'Export the disks from a GCE instance to a storage bucket.',
             args=[
                 ('instance_name', 'Name of the GCE instance to create.', ''),
                 ('path', 'Path to bucket.', None),
