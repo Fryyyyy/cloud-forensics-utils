@@ -386,7 +386,7 @@ def Main() -> None:
   AddParser('gcp', gcp_subparsers, 'downloadobject', 'Downloads a GCS object',
             args=[
                 ('path', 'Path to GCS object.', None),
-                ('dest', 'Destination file.', None),
+                ('--dest', 'Destination file.', None),
             ])
   AddParser('gcp', gcp_subparsers, 'quarantinevm', 'Put a VM in '
                                                    'network quarantine.',

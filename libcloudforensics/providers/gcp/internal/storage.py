@@ -299,13 +299,16 @@ class GoogleCloudStorage:
 
   def GetObject(self,
                 gcs_path: str,
-                out_file: Optional[str] = None) -> Dict[str, Any]:
+                out_file: Optional[str] = None) -> str:
     """Gets the contents of an object in a Google Cloud Storage bucket.
 
     Args:
       gcs_path (str): Full path to the object (ie: gs://bucket/dir1/dir2/obj)
       out_file (str): Path to the local file that will be written.
         If not provided, will create a temporary file.
+
+    Returns:
+      str: The filename of the written object.
     """
     if not gcs_path.startswith('gs://'):
       gcs_path = 'gs://' + gcs_path
@@ -316,7 +319,8 @@ class GoogleCloudStorage:
     if out_file:
       outputfile = open(out_file, 'wb')
     else:
-      outputfile = tempfile.TemporaryFile()
+      outputfile = tempfile.NamedTemporaryFile(delete=False)
+      out_file = outputfile.name
     downloader = googleapiclient.http.MediaIoBaseDownload(outputfile, request)
 
     done = False
@@ -324,4 +328,4 @@ class GoogleCloudStorage:
       status, done = downloader.next_chunk()
       logger.info('Download {}%.'.format(int(status.progress() * 100)))
 
-    return outputfile
+    return out_file

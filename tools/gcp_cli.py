@@ -374,9 +374,9 @@ def DownloadObject(args: 'argparse.Namespace') -> None:
     args (argparse.Namespace): Arguments from ArgumentParser.
   """
   gcs = gcp_storage.GoogleCloudStorage(args.project)
-  gcs.GetObject(args.path, args.dest)
+  filename = gcs.GetObject(args.path, args.dest)
 
-  print('Object downloaded.')
+  print('Object downloaded to {0:s}.'.format(filename))
 
 
 def InstanceNetworkQuarantine(args: 'argparse.Namespace') -> None:
