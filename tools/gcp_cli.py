@@ -16,8 +16,6 @@
 
 from datetime import datetime
 import json
-import shutil
-import subprocess
 import sys
 from typing import TYPE_CHECKING
 
@@ -99,20 +97,19 @@ def ExportDisksToBucket(args: 'argparse.Namespace') -> None:
   gcs = gcp_storage.GoogleCloudStorage(args.project)
 
   s3_dest = None
-  gsutil = None
   if not (args.path.startswith('gs://') or args.path.startswith('s3://')):
     sys.exit('Destination bucket path must start with gs:// or s3://')
   if args.path.startswith('s3://'):
     s3_dest = args.path
     args.path = 'gs://' + common.GenerateUniqueInstanceName('transfer-from-cfu')
     logger.info('Setting temporary bucket path to {0:s}'.format(args.path))
-    gsutil = shutil.which('gsutil')
-    if gsutil is None:
-      sys.exit('gsutil is required to copy files to S3')
 
   logger.warning('You must enable the following APIs:')
   logger.warning(
       'https://cloud.google.com/compute/docs/images/export-image#enable-cloud-build'  # pylint: disable=line-too-long
+  )
+  logger.warning(
+      'If transferring to an S3 bucket: https://console.cloud.google.com/apis/api/storagetransfer.googleapis.com/overview'  # pylint: disable=line-too-long
   )
   # TODO(fryy): Automatically find and delete the Daisy bucket
   logger.warning(
@@ -140,12 +137,7 @@ def ExportDisksToBucket(args: 'argparse.Namespace') -> None:
     i.ExportImage('gs://' + bucket)
     logger.info('Deleting image.')
     i.Delete()
-    if s3_dest:
-      # TODO(fryy): Should this use STS instead?
-      command = [gsutil, '-m', 'rsync', args.path, s3_dest]
-      logger.info('Exporting image to S3 by running "{0:s}"'.format(" ".join(command)))
-      result = subprocess.run(command, capture_output=True, check=True)
-      logger.info(result)
+    # if s3_dest:
 
 
 def DeleteInstance(args: 'argparse.Namespace') -> None:
@@ -373,6 +365,18 @@ def DeleteObject(args: 'argparse.Namespace') -> None:
   gcs.DeleteObject(args.path)
 
   print('Object deleted.')
+
+
+def DownloadObject(args: 'argparse.Namespace') -> None:
+  """Downloads an object from GCS.
+
+  Args:
+    args (argparse.Namespace): Arguments from ArgumentParser.
+  """
+  gcs = gcp_storage.GoogleCloudStorage(args.project)
+  gcs.GetObject(args.path, args.dest)
+
+  print('Object downloaded.')
 
 
 def InstanceNetworkQuarantine(args: 'argparse.Namespace') -> None:

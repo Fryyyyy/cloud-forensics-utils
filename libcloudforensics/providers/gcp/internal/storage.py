@@ -16,15 +16,21 @@
 
 import collections
 import datetime
+import tempfile
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Tuple
 
+import googleapiclient.http
 from googleapiclient.errors import HttpError
 
 from libcloudforensics import errors
+from libcloudforensics import logging_utils
 from libcloudforensics.providers.gcp.internal import common
 # pylint: disable=line-too-long
 from libcloudforensics.providers.gcp.internal import monitoring as gcp_monitoring
 # pylint: enable=line-too-long
+
+logging_utils.SetUpLogger(__name__)
+logger = logging_utils.GetLogger(__name__)
 
 if TYPE_CHECKING:
   import googleapiclient
@@ -171,7 +177,7 @@ class GoogleCloudStorage:
     """Deletes an object in a Google Cloud Storage bucket.
 
     Args:
-      gcs_path (str): Full path to the object (ie: gs://bucket/dir1/dir1/obj)
+      gcs_path (str): Full path to the object (ie: gs://bucket/dir1/dir2/obj)
     """
 
     if not gcs_path.startswith('gs://'):
@@ -290,3 +296,32 @@ class GoogleCloudStorage:
           'Unknown error occurred when creating bucket:'
           ' {0!s}'.format(exception), __name__) from exception
     return response
+
+  def GetObject(self,
+                gcs_path: str,
+                out_file: Optional[str] = None) -> Dict[str, Any]:
+    """Gets the contents of an object in a Google Cloud Storage bucket.
+
+    Args:
+      gcs_path (str): Full path to the object (ie: gs://bucket/dir1/dir2/obj)
+      out_file (str): Path to the local file that will be written.
+        If not provided, will create a temporary file.
+    """
+    if not gcs_path.startswith('gs://'):
+      gcs_path = 'gs://' + gcs_path
+    gcs_objects = self.GcsApi().objects()
+    (bucket, filename) = SplitGcsPath(gcs_path)
+    request = gcs_objects.get_media(bucket=bucket, object=filename)
+
+    if out_file:
+      outputfile = open(out_file, 'wb')
+    else:
+      outputfile = tempfile.TemporaryFile()
+    downloader = googleapiclient.http.MediaIoBaseDownload(outputfile, request)
+
+    done = False
+    while not done:
+      status, done = downloader.next_chunk()
+      logger.info('Download {}%.'.format(int(status.progress() * 100)))
+
+    return outputfile

@@ -54,6 +54,7 @@ PROVIDER_TO_FUNC = {
         'listinstances': gcp_cli.ListInstances,
         'listlogs': gcp_cli.ListLogs,
         'listobjects': gcp_cli.ListBucketObjects,
+        'downloadobject': gcp_cli.DownloadObject,
         'listservices': gcp_cli.ListServices,
         'objectmetadata': gcp_cli.GetGCSObjectMetadata,
         'quarantinevm': gcp_cli.InstanceNetworkQuarantine,
@@ -381,6 +382,11 @@ def Main() -> None:
   AddParser('gcp', gcp_subparsers, 'deleteobject', 'Deletes a GCS object',
             args=[
                 ('path', 'Path to GCS object.', None),
+            ])
+  AddParser('gcp', gcp_subparsers, 'downloadobject', 'Downloads a GCS object',
+            args=[
+                ('path', 'Path to GCS object.', None),
+                ('dest', 'Destination file.', None),
             ])
   AddParser('gcp', gcp_subparsers, 'quarantinevm', 'Put a VM in '
                                                    'network quarantine.',
