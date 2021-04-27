@@ -14,10 +14,12 @@
 # limitations under the License.
 """Bucket functionality."""
 
+import os
 from typing import TYPE_CHECKING, Dict, Optional, Any
 
 from libcloudforensics import errors
 from libcloudforensics.providers.aws.internal import common
+from libcloudforensics.providers.gcp.internal import storage as gcp_storage
 
 if TYPE_CHECKING:
   # TYPE_CHECKING is always False at runtime, therefore it is safe to ignore
@@ -86,3 +88,45 @@ class S3:
           'Could not create bucket {0:s}: {1:s}'.format(
               name, str(exception)),
           __name__) from exception
+
+
+  def Put(self, s3_path, local_file) -> None:
+    """Upload a local file to an S3 bucket.
+
+    Args:
+      s3_path (str): Path to the target S3 bucket.
+          Ex: s3://test/bucket
+      local_file (str): Path to the file to be uploaded.
+          Ex: /tmp/myfile
+    """
+    client = self.aws_account.ClientApi(common.S3_SERVICE)
+    try:
+      response = client.upload_file(
+          local_file, s3_path, os.path.basename(local_file))
+    except client.exceptions.ClientError as exception:
+      raise errors.ResourceCreationError(
+          'Could not create bucket {0:s}: {1:s}'.format(
+              name, str(exception)),
+          __name__) from exception
+
+
+  def GCSToS3(self,
+              project_id: str,
+              gcs_path: str,
+              s3_path: str) -> None:
+    """Copy an object in GCS to an S3 bucket.
+
+    Args:
+      project_id (str): Google Cloud project ID.
+      gcs_path (str): File path to the source GCS object.
+          Ex: gs://bucket/folder/obj
+      s3_path (str): Path to the target S3 bucket.
+          Ex: s3://test/bucket
+
+    Returns:
+      Dict: An API operation object for an S3 Put request.
+        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object  # pylint: disable=line-too-long
+    """
+    client = self.aws_account.ClientApi(common.S3_SERVICE)
+    gcs = gcp_storage.GoogleCloudStorage(project_id)
+    localcopy = gcs.GetObject(gcs_path)
