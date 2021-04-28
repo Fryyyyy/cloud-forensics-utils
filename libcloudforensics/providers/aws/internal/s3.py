@@ -98,6 +98,9 @@ class S3:
           Ex: s3://test/bucket
       local_file (str): Path to the file to be uploaded.
           Ex: /tmp/myfile
+
+    Raises:
+      ResourceCreationError: If the object couldn't be uploaded.
     """
     client = self.aws_account.ClientApi(common.S3_SERVICE)
     try:
@@ -126,7 +129,18 @@ class S3:
     Returns:
       Dict: An API operation object for an S3 Put request.
         https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object  # pylint: disable=line-too-long
+
+    Raises:
+      ResourceCreationError: If the object couldn't be uploaded.
     """
     client = self.aws_account.ClientApi(common.S3_SERVICE)
     gcs = gcp_storage.GoogleCloudStorage(project_id)
     localcopy = gcs.GetObject(gcs_path)
+    try:
+      self.CreateBucket(gcp_storage.SplitStoragePath(s3_path)[0])
+    except errors.ResourceCreationError as exception:
+      if 'already exists' in exception.message:
+        logger.info('Target bucket already exists. Reusing.')
+      else:
+        raise exception
+    self.Put(s3_path, localcopy)

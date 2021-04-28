@@ -20,6 +20,8 @@ import sys
 from typing import TYPE_CHECKING
 
 # pylint: disable=line-too-long
+from libcloudforensics import errors, logging_utils
+from libcloudforensics.providers.aws.internal import s3 as aws_s3
 from libcloudforensics.providers.gcp import forensics
 from libcloudforensics.providers.gcp.internal import common
 from libcloudforensics.providers.gcp.internal import compute as gcp_compute
@@ -27,7 +29,6 @@ from libcloudforensics.providers.gcp.internal import log as gcp_log
 from libcloudforensics.providers.gcp.internal import monitoring as gcp_monitoring
 from libcloudforensics.providers.gcp.internal import project as gcp_project
 from libcloudforensics.providers.gcp.internal import storage as gcp_storage
-from libcloudforensics import errors, logging_utils
 # pylint: enable=line-too-long
 
 logging_utils.SetUpLogger(__name__)
@@ -118,7 +119,9 @@ def ExportDisksToBucket(args: 'argparse.Namespace') -> None:
 
   try:
     logger.info('Creating bucket {0:s}'.format(args.path))
-    bucket = gcs.CreateBucket(args.path, labels={'created_by': 'cfu'}).get('name')
+    bucket = gcs.CreateBucket(args.path, labels={
+        'created_by': 'cfu'
+    }).get('name')
   except errors.ResourceCreationError as exception:
     if 'already exists' in exception.message:
       logger.info('Target bucket already exists. Reusing.')
@@ -134,10 +137,13 @@ def ExportDisksToBucket(args: 'argparse.Namespace') -> None:
     i = compute_client.CreateImageFromDisk(d)
     logger.info(
         'Image created from disk: {0:s}. Exporting to GCS.'.format(i.name))
-    i.ExportImage('gs://' + bucket)
+    gcs_dest = 'gs://' + bucket
+    i.ExportImage(gcs_dest)
     logger.info('Deleting image.')
     i.Delete()
-    # if s3_dest:
+    if s3_dest:
+      logger.info('Transferring file {0:s} to {1:s}.'.format(gcs_dest, s3_dest))
+      aws_s3.S3.GCSToS3(args.project, gcs_dest, s3_dest)
 
 
 def DeleteInstance(args: 'argparse.Namespace') -> None:

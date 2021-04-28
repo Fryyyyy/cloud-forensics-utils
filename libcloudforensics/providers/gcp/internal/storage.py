@@ -17,6 +17,7 @@
 import collections
 import datetime
 import tempfile
+import os
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Tuple
 
 import googleapiclient.http
@@ -36,11 +37,11 @@ if TYPE_CHECKING:
   import googleapiclient
 
 
-def SplitGcsPath(gcs_path: str) -> Tuple[str, str]:
-  """Split GCS path to bucket name and object URI.
+def SplitStoragePath(gcs_path: str) -> Tuple[str, str]:
+  """Split a path to bucket name and object URI.
 
   Args:
-    gcs_path (str): File path to a resource in GCS.
+    gcs_path (str): File path to a resource.
         Ex: gs://bucket/folder/obj
 
   Returns:
@@ -101,7 +102,7 @@ class GoogleCloudStorage:
     """
     if not gcs_path.startswith('gs://'):
       gcs_path = 'gs://' + gcs_path
-    bucket, object_path = SplitGcsPath(gcs_path)
+    bucket, object_path = SplitStoragePath(gcs_path)
     gcs_objects = self.GcsApi().objects()
     request = gcs_objects.get(
         bucket=bucket, object=object_path, userProject=user_project)
@@ -182,7 +183,7 @@ class GoogleCloudStorage:
 
     if not gcs_path.startswith('gs://'):
       gcs_path = 'gs://' + gcs_path
-    bucket, object_path = SplitGcsPath(gcs_path)
+    bucket, object_path = SplitStoragePath(gcs_path)
     gcs_objects = self.GcsApi().objects()
     request = gcs_objects.delete(bucket=bucket, object=object_path)
     request.execute()  # type: Dict[str, Any]
@@ -313,13 +314,14 @@ class GoogleCloudStorage:
     if not gcs_path.startswith('gs://'):
       gcs_path = 'gs://' + gcs_path
     gcs_objects = self.GcsApi().objects()
-    (bucket, filename) = SplitGcsPath(gcs_path)
+    (bucket, filename) = SplitStoragePath(gcs_path)
     request = gcs_objects.get_media(bucket=bucket, object=filename)
 
     if out_file:
       outputfile = open(out_file, 'wb')
     else:
-      outputfile = tempfile.NamedTemporaryFile(delete=False)
+      outputfile = tempfile.NamedTemporaryFile(
+          prefix=os.path.basename(filename), delete=False)
       out_file = outputfile.name
     downloader = googleapiclient.http.MediaIoBaseDownload(outputfile, request)
 
