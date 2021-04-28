@@ -18,8 +18,12 @@ import os
 from typing import TYPE_CHECKING, Dict, Optional, Any
 
 from libcloudforensics import errors
+from libcloudforensics import logging_utils
 from libcloudforensics.providers.aws.internal import common
 from libcloudforensics.providers.gcp.internal import storage as gcp_storage
+
+logging_utils.SetUpLogger(__name__)
+logger = logging_utils.GetLogger(__name__)
 
 if TYPE_CHECKING:
   # TYPE_CHECKING is always False at runtime, therefore it is safe to ignore
@@ -103,6 +107,8 @@ class S3:
       ResourceCreationError: If the object couldn't be uploaded.
     """
     client = self.aws_account.ClientApi(common.S3_SERVICE)
+    if s3_path.startswith('s3://'):
+      s3_path = s3_path[5:]
     try:
       response = client.upload_file(
           local_file, s3_path, os.path.basename(local_file))
@@ -135,6 +141,10 @@ class S3:
     """
     client = self.aws_account.ClientApi(common.S3_SERVICE)
     gcs = gcp_storage.GoogleCloudStorage(project_id)
+    if not s3_path.startswith('s3://'):
+      s3_path = 's3://' + s3_path
+    if not gcs_path.startswith('gs://'):
+      gcs_path = 'gs://' + gcs_path
     localcopy = gcs.GetObject(gcs_path)
     try:
       self.CreateBucket(gcp_storage.SplitStoragePath(s3_path)[0])

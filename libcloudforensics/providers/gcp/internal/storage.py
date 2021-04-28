@@ -37,18 +37,18 @@ if TYPE_CHECKING:
   import googleapiclient
 
 
-def SplitStoragePath(gcs_path: str) -> Tuple[str, str]:
+def SplitStoragePath(path: str) -> Tuple[str, str]:
   """Split a path to bucket name and object URI.
 
   Args:
-    gcs_path (str): File path to a resource.
+    path (str): File path to a resource.
         Ex: gs://bucket/folder/obj
 
   Returns:
     Tuple[str, str]: Bucket name. Object URI.
   """
 
-  _, _, full_path = gcs_path.partition('//')
+  _, _, full_path = path.partition('//')
   bucket, _, object_uri = full_path.partition('/')
   return bucket, object_uri
 
