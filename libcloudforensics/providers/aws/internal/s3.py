@@ -154,3 +154,6 @@ class S3:
       else:
         raise exception
     self.Put(s3_path, localcopy)
+    logger.info('Attempting to delete local (temporary) copy')
+    os.unlink(localcopy.name)
+    logger.info('Done')
