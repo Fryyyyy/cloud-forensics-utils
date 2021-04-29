@@ -57,6 +57,7 @@ PROVIDER_TO_FUNC = {
         'listlogs': gcp_cli.ListLogs,
         'listobjects': gcp_cli.ListBucketObjects,
         'downloadobject': gcp_cli.DownloadObject,
+        's3togcs': gcp_cli.S3ToGCS,
         'listservices': gcp_cli.ListServices,
         'objectmetadata': gcp_cli.GetGCSObjectMetadata,
         'quarantinevm': gcp_cli.InstanceNetworkQuarantine,
@@ -402,6 +403,13 @@ def Main() -> None:
             args=[
                 ('path', 'Path to GCS object.', None),
                 ('--dest', 'Destination file.', None),
+            ])
+  AddParser('gcp', gcp_subparsers, 's3togcs',
+            'Transfer an S3 object to a GCS bucket.',
+            args=[
+                ('s3_path', 'Path to S3 object.', None),
+                ('zone', 'Amazon availability zone.', None),
+                ('gcs_path', 'Target GCS bucket.', None),
             ])
   AddParser('gcp', gcp_subparsers, 'quarantinevm', 'Put a VM in '
                                                    'network quarantine.',

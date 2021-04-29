@@ -29,6 +29,7 @@ from libcloudforensics.providers.gcp.internal import log as gcp_log
 from libcloudforensics.providers.gcp.internal import monitoring as gcp_monitoring
 from libcloudforensics.providers.gcp.internal import project as gcp_project
 from libcloudforensics.providers.gcp.internal import storage as gcp_storage
+from libcloudforensics.providers.gcp.internal import storagetransfer as gcp_st
 # pylint: enable=line-too-long
 
 logging_utils.SetUpLogger(__name__)
@@ -383,6 +384,18 @@ def DownloadObject(args: 'argparse.Namespace') -> None:
   filename = gcs.GetObject(args.path, args.dest)
 
   print('Object downloaded to {0:s}.'.format(filename))
+
+
+def S3ToGCS(args: 'argparse.Namespace') -> None:
+  """Transfer a file from S3 to a GCS bucket.
+
+  Args:
+    args (argparse.Namespace): Arguments from ArgumentParser.
+  """
+  gcst = gcp_st.GoogleCloudStorageTransfer(args.project)
+  gcst.S3ToGCS(args.s3_path, args.zone, args.gcs_path)
+
+  logger.info('File successfully transferred.')
 
 
 def InstanceNetworkQuarantine(args: 'argparse.Namespace') -> None:

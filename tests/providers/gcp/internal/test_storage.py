@@ -27,9 +27,9 @@ class GoogleCloudStorageTest(unittest.TestCase):
   # pylint: disable=line-too-long
 
   @typing.no_type_check
-  def testSplitGcsPath(self):
+  def testSplitStoragePath(self):
     """Tests that GCS path split is correctly done."""
-    bucket, object_uri = gcp_storage.SplitGcsPath('gs://fake-bucket/fake-folder/fake-object')
+    bucket, object_uri = gcp_storage.SplitStoragePath('gs://fake-bucket/fake-folder/fake-object')
     self.assertEqual('fake-folder/fake-object', object_uri)
     self.assertEqual('fake-bucket', bucket)
 
