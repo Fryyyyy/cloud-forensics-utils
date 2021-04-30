@@ -85,6 +85,8 @@ class GoogleCloudStorageTransfer:
     aws_creds = account.AWSAccount(zone).session.get_credentials()
     s3_bucket, s3_path = gcp_storage.SplitStoragePath(s3_path)
     gcs_bucket, gcs_path = gcp_storage.SplitStoragePath(gcs_path)
+    if not gcs_path.endswith('/'):
+      gcs_path = gcs_path + '/'
     today = datetime.datetime.now()
     transfer_job_body = {
         'projectId': self.project_id,
@@ -115,8 +117,7 @@ class GoogleCloudStorageTransfer:
         },
         'status': 'ENABLED'
     }
-    logger.info(
-        'Creating transfer job with spec: {0:s}'.format(str(transfer_job_body)))
+    logger.info('Creating transfer job')
     gcst_jobs = self.GcstApi().transferJobs()
     create_request = gcst_jobs.create(body=transfer_job_body)
     return create_request.execute()
