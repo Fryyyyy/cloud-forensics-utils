@@ -110,11 +110,15 @@ class S3:
     if s3_path.startswith('s3://'):
       s3_path = s3_path[5:]
     try:
-      response = client.upload_file(
-          local_file, s3_path, os.path.basename(local_file))
+      client.upload_file(local_file, s3_path, os.path.basename(local_file))
+    except FileNotFoundError as exception:
+      raise errors.ResourceNotFoundError(
+          'Could not upload file {0:s}: {1:s}'.format(
+              local_file, str(exception)),
+          __name__) from exception
     except client.exceptions.ClientError as exception:
       raise errors.ResourceCreationError(
-          'Could not create bucket {0:s}: {1:s}'.format(
+          'Could not upload file {0:s}: {1:s}'.format(
               name, str(exception)),
           __name__) from exception
 

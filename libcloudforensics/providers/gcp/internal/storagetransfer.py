@@ -81,6 +81,9 @@ class GoogleCloudStorageTransfer:
     Returns:
       Dict: An API operation object for a Google Cloud Storage Transfer job.
         https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs#TransferJob  # pylint: disable=line-too-long
+
+    Raises:
+      TransferCreationError: If the transfer couldn't be created.
     """
     aws_creds = account.AWSAccount(zone).session.get_credentials()
     s3_bucket, s3_path = gcp_storage.SplitStoragePath(s3_path)
@@ -120,4 +123,30 @@ class GoogleCloudStorageTransfer:
     logger.info('Creating transfer job')
     gcst_jobs = self.GcstApi().transferJobs()
     create_request = gcst_jobs.create(body=transfer_job_body)
-    return create_request.execute()
+    transfer_job = create_request.execute()
+    job_name = transfer_job.get('name', 'Error: name not found')
+    if 'Error' in job_name:
+      raise errors.TransferCreationError(
+          'Could not execute transfer. Job output: {0:s}'.format(
+              str(transfer_job)))
+    logger.info('Job created: {0:s}'.format(job_name))
+    gcst_transfers = self.GcstApi().transferOperations()
+    status_request = gcst_transfers.list(
+        name='transferOperations',
+        filter={
+            'projectId': self.project_id, 'jobNames': [job_name]
+        })
+    status = status_request.execute()
+    logger.info('Job status: {0:s}'.format(str(status)))
+    if status.get('operations'):
+      raise errors.TransferCreationError(
+          'Could not execute transfer. Job output: {0:s}'.format(
+              str(status)))
+    for operation in status.get('operations', []):
+      counters = operation.get('counters', {})
+      logger.info(
+          'Transferred {0:d} /{1:d} files ({2:d}/{3:d} bytes).'.format(
+              counters.get('objectsFoundFromSource', 0),
+              counters.get('objectsCopiedToSink', 0),
+              counters.get('bytesFoundFromSource', 0),
+              counters.get('bytesCopiedToSink', 0)))
