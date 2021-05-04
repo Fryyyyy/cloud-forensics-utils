@@ -73,3 +73,6 @@ class ServiceAccountRemovalError(LCFError):
 
 class TransferCreationError(LCFError):
   """Error when an issue with creating a new transfer job is encountered."""
+
+class TransferExecutionError(LCFError):
+  """Error when an issue with running a transfer job is encountered."""

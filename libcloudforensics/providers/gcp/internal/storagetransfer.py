@@ -16,6 +16,7 @@
 
 from typing import TYPE_CHECKING, Dict, Any, Optional
 import datetime
+import time
 
 from libcloudforensics import errors
 from libcloudforensics import logging_utils
@@ -79,11 +80,12 @@ class GoogleCloudStorageTransfer:
           Ex: gs://bucket/folder
 
     Returns:
-      Dict: An API operation object for a Google Cloud Storage Transfer job.
-        https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferJobs#TransferJob  # pylint: disable=line-too-long
+      Dict: An API operation object for a Google Cloud Storage Transfer operation.
+        https://cloud.google.com/storage-transfer/docs/reference/rest/v1/transferOperations/list  # pylint: disable=line-too-long
 
     Raises:
       TransferCreationError: If the transfer couldn't be created.
+      TransferExecutionError: If the transfer couldn't be run.
     """
     aws_creds = account.AWSAccount(zone).session.get_credentials()
     s3_bucket, s3_path = gcp_storage.SplitStoragePath(s3_path)
@@ -124,29 +126,40 @@ class GoogleCloudStorageTransfer:
     gcst_jobs = self.GcstApi().transferJobs()
     create_request = gcst_jobs.create(body=transfer_job_body)
     transfer_job = create_request.execute()
+    logger.info('Job created: {0:s}'.format(str(transfer_job)))
     job_name = transfer_job.get('name', 'Error: name not found')
     if 'Error' in job_name:
       raise errors.TransferCreationError(
-          'Could not execute transfer. Job output: {0:s}'.format(
-              str(transfer_job)))
+          'Could not create transfer. Job output: {0:s}'.format(
+              str(transfer_job)), __name__)
     logger.info('Job created: {0:s}'.format(job_name))
     gcst_transfers = self.GcstApi().transferOperations()
-    status_request = gcst_transfers.list(
-        name='transferOperations',
-        filter={
-            'projectId': self.project_id, 'jobNames': [job_name]
-        })
-    status = status_request.execute()
+    filter_string = (
+        '{{"projectId": "{0:s}", "jobNames": ["{1:s}"]}}').format(
+            self.project_id, job_name)
+    status = {}
+    while 'operations' not in status:
+      time.sleep(5)
+      status = gcst_transfers.list(
+          name='transferOperations', filter=filter_string).execute()
+      logger.info('Waiting for transfer to start...')
     logger.info('Job status: {0:s}'.format(str(status)))
-    if status.get('operations'):
-      raise errors.TransferCreationError(
-          'Could not execute transfer. Job output: {0:s}'.format(
-              str(status)))
+    while status['operations'][0].get('metadata', {}).get('status',
+                                                          '') == 'IN_PROGRESS':
+      time.sleep(5)
+      status = gcst_transfers.list(
+          name='transferOperations', filter=filter_string).execute()
+      logger.info('Waiting to finish...')
     for operation in status.get('operations', []):
+      if operation.get('metadata', {}).get('status', '') != 'SUCCESS':
+        raise errors.TransferExecutionError(
+            'Could not execute transfer. Job output: {0:s}'.format(str(status)),
+            __name__)
       counters = operation.get('counters', {})
       logger.info(
-          'Transferred {0:d} /{1:d} files ({2:d}/{3:d} bytes).'.format(
+          'Transferred {0:d}/{1:d} files ({2:d}/{3:d} bytes).'.format(
               counters.get('objectsFoundFromSource', 0),
               counters.get('objectsCopiedToSink', 0),
               counters.get('bytesFoundFromSource', 0),
               counters.get('bytesCopiedToSink', 0)))
+    return status
