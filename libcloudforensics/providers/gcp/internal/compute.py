@@ -237,6 +237,33 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
 
     return instances
 
+  def ListSnapshots(self, filter_string: str | None = None) -> Dict[str, Any]:
+    """List snapshots in project.
+
+    Args:
+      filter_string: Filter for the snapshot query.
+
+    Returns:
+      Dict[str, Any]: Dictionary mapping snapshot IDs (str)
+          to their respective snapshot description.
+        See:
+        https://docs.cloud.google.com/compute/docs/reference/rest/v1/snapshots/list
+    """
+    snapshots = {}
+    gce_snapshot_client = self.GceApi().snapshots()  # pylint: disable=no-member
+    responses = common.ExecuteRequest(
+        gce_snapshot_client,
+        'list',
+        {'project': self.project_id, 'filter': filter_string},
+    )
+
+    for response in responses:
+      for snapshot in response.get('items', []):
+        name = snapshot['name']
+        snapshots[name] = snapshot
+
+    return snapshots
+
   def ListMIGSByInstanceName(self, location: str) -> Dict[str, str]:
     """Gets a mapping from instance names to their managed instance group.
 
