@@ -174,6 +174,15 @@ class GoogleCloudComputeTest(unittest.TestCase):
     self.assertEqual('new-forensics-disk', disk_from_snapshot.name)
 
     # CreateDiskFromSnapshot(Snapshot=gcp_mocks.FAKE_SNAPSHOT,
+    # dest_project='other-project', dest_zone='other-zone')
+    disk_from_snapshot = gcp_mocks.FAKE_ANALYSIS_PROJECT.compute.CreateDiskFromSnapshot(
+        gcp_mocks.FAKE_SNAPSHOT, dest_project='other-project', dest_zone='other-zone')
+    self.assertIsInstance(
+        disk_from_snapshot, compute.GoogleComputeDisk)
+    self.assertEqual('other-project', disk_from_snapshot.project_id)
+    self.assertEqual('other-zone', disk_from_snapshot.zone)
+
+    # CreateDiskFromSnapshot(Snapshot=gcp_mocks.FAKE_SNAPSHOT,
     # disk_name='fake-disk') where 'fake-disk' exists already
     disks.return_value.insert.return_value.execute.side_effect = HttpError(
         resp=mock.Mock(status=409), content=b'Disk already exists')
