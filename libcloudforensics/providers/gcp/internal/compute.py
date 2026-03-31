@@ -580,7 +580,7 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
           'Unknown error occurred when creating disk from Snapshot:'
           ' {0!s}'.format(exception),
           __name__) from exception
-    self.BlockOperation(response, zone=zone, project_id=project_id)
+    self.BlockOperation(response, zone=zone)
     return GoogleComputeDisk(
         project_id=project_id, zone=zone, name=disk_name)
 
