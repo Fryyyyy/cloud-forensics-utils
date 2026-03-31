@@ -525,7 +525,9 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
       snapshot: 'GoogleComputeSnapshot',
       disk_name: Optional[str] = None,
       disk_name_prefix: Optional[str] = None,
-      disk_type: str = 'pd-standard') -> 'GoogleComputeDisk':
+      disk_type: str = 'pd-standard',
+      dest_project: Optional[str] = None,
+      dest_zone: Optional[str] = None) -> 'GoogleComputeDisk':
     """Create a new disk based on a Snapshot.
 
     Args:
@@ -536,6 +538,10 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
           which disk type to use to create the disk. Default is pd-standard. Use
           pd-ssd to have a SSD disk. You can list all available disk types by
           running the following command: gcloud compute disk-types list
+      dest_project (str): Optional. The destination project where the disk
+          should be created. Default is self.project_id.
+      dest_zone (str): Optional. The destination zone where the disk
+          should be created. Default is self.default_zone.
 
     Returns:
       GoogleComputeDisk: Google Compute Disk.
@@ -547,6 +553,10 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
 
     if not disk_name:
       disk_name = common.GenerateDiskName(snapshot, disk_name_prefix)
+
+    project_id = dest_project or self.project_id
+    zone = dest_zone or self.default_zone
+
     body = {
         'name':
             disk_name,
@@ -554,12 +564,12 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
             snapshot.GetSourceString(),
         'type':
             'projects/{0:s}/zones/{1:s}/diskTypes/{2:s}'.format(
-                self.project_id, self.default_zone, disk_type)
+                project_id, zone, disk_type)
     }
     try:
       gce_disks_client = self.GceApi().disks() # pylint: disable=no-member
       request = gce_disks_client.insert(
-          project=self.project_id, zone=self.default_zone, body=body)
+          project=project_id, zone=zone, body=body)
       response = request.execute()
     except HttpError as exception:
       if exception.resp.status == 409:
@@ -570,9 +580,9 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
           'Unknown error occurred when creating disk from Snapshot:'
           ' {0!s}'.format(exception),
           __name__) from exception
-    self.BlockOperation(response, zone=self.default_zone)
+    self.BlockOperation(response, zone=zone, project_id=project_id)
     return GoogleComputeDisk(
-        project_id=self.project_id, zone=self.default_zone, name=disk_name)
+        project_id=project_id, zone=zone, name=disk_name)
 
   def GetMachineTypes(self, machine_type: str,
                       zone: Optional[str] = None) -> Dict[str, Any]:
