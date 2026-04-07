@@ -136,7 +136,8 @@ def StartAnalysisVm(
     cpu_cores: int = 4,
     attach_disks: Optional[List[str]] = None,
     image_project: str = 'ubuntu-os-cloud',
-    image_family: str = 'ubuntu-2204-lts'
+    image_family: str = 'ubuntu-2204-lts',
+    packages: Optional[List[str]] = None
 ) -> Tuple['compute.GoogleComputeInstance', bool]:
   """Start a virtual machine for analysis purposes.
 
@@ -157,6 +158,7 @@ def StartAnalysisVm(
         image is hosted.
     image_family: Name of the image to use to create the
         analysis VM.
+    packages: List of extra packages to install in the VM.
 
   Returns:
     A tuple with a virtual machine object
@@ -175,6 +177,7 @@ def StartAnalysisVm(
   analysis_vm, created = proj.compute.GetOrCreateAnalysisVm(
       vm_name, boot_disk_size, disk_type=boot_disk_type, cpu_cores=cpu_cores,
       image_project=image_project, image_family=image_family,
+      packages=packages,
       data_disks=data_disks, zone=zone)
   logger.info('VM started.')
   return analysis_vm, created
