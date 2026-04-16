@@ -955,7 +955,7 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
       pass
     return self.CreateInstanceFromRequest(request_body, compute_zone)
 
-  def GetOrCreateAnalysisVm(
+  def GetOrCreateAnalysisVm( # pylint: disable=too-many-arguments
       self,
       vm_name: str,
       boot_disk_size: int = 10,

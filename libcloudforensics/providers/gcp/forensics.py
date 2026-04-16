@@ -130,7 +130,7 @@ def CreateDiskCopy(
   return new_disk
 
 
-def StartAnalysisVm(
+def StartAnalysisVm( # pylint: disable=too-many-arguments
     project: str,
     vm_name: str,
     zone: str,
