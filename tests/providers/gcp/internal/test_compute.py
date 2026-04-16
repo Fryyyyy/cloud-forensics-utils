@@ -440,6 +440,8 @@ class GoogleCloudComputeTest(unittest.TestCase):
     vm, created = gcp_mocks.FAKE_ANALYSIS_PROJECT.compute.GetOrCreateAnalysisVm(
         gcp_mocks.FAKE_ANALYSIS_VM.name, machine_type='custom-machine-type')
 
+    mock_get_instance.assert_called_with(gcp_mocks.FAKE_ANALYSIS_VM.name)
+    self.assertIsInstance(vm, compute.GoogleComputeInstance)
     self.assertTrue(created)
     mock_create_from_args.assert_called_once()
     args, _ = mock_create_from_args.call_args
