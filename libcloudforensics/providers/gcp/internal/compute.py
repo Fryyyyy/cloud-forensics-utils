@@ -961,6 +961,7 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
       boot_disk_size: int = 10,
       disk_type: str = 'pd-standard',
       cpu_cores: int = 4,
+      machine_type: Optional[str] = None,
       image_project: str = 'ubuntu-os-cloud',
       image_family: str = 'ubuntu-2204-lts',
       packages: Optional[List[str]] = None,
@@ -984,6 +985,8 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
           which disk type to use to create the disk. Default is pd-standard. Use
           pd-ssd to have a SSD disk.
       cpu_cores: Number of CPU cores for the virtual machine.
+      machine_type: Machine type for the virtual machine. If specified,
+          cpu_cores will be ignored.
       image_project: Name of the project where the analysis VM
           image is hosted.
       image_family: Name of the image to use to create the
@@ -1022,11 +1025,13 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
       pass
     compute_zone = zone if zone else self.default_zone
 
-    if cpu_cores not in E2_STANDARD_CPU_CORES:
-      raise ValueError(
-          'Number of requested CPU cores ({0:d}) not available for machine type'
-          ' {1:s}'.format(cpu_cores, DEFAULT_MACHINE_TYPE))
-    machine_type = '{0:s}-{1:d}'.format(DEFAULT_MACHINE_TYPE, cpu_cores)
+    if machine_type is None:
+      if cpu_cores not in E2_STANDARD_CPU_CORES:
+        raise ValueError(
+            'Number of requested CPU cores ({0:d}) '
+            'not available for machine type'
+            ' {1:s}'.format(cpu_cores, DEFAULT_MACHINE_TYPE))
+      machine_type = '{0:s}-{1:d}'.format(DEFAULT_MACHINE_TYPE, cpu_cores)
     startup_script = utils.ReadStartupScript(utils.FORENSICS_STARTUP_SCRIPT_GCP)
 
     if packages:
