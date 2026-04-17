@@ -130,17 +130,18 @@ def CreateDiskCopy(
   return new_disk
 
 
-def StartAnalysisVm(
+def StartAnalysisVm( # pylint: disable=too-many-arguments
     project: str,
     vm_name: str,
     zone: str,
     boot_disk_size: int = 10,
     boot_disk_type: str = 'pd-standard',
     cpu_cores: int = 4,
+    machine_type: Optional[str] = None,
     attach_disks: Optional[List[str]] = None,
     image_project: str = 'ubuntu-os-cloud',
     image_family: str = 'ubuntu-2204-lts',
-    packages: Optional[List[str]] = None
+    packages: Optional[List[str]] = None,
 ) -> Tuple['compute.GoogleComputeInstance', bool]:
   """Start a virtual machine for analysis purposes.
 
@@ -149,18 +150,18 @@ def StartAnalysisVm(
     vm_name: The name of the virtual machine.
     zone: Zone for the virtual machine.
     boot_disk_size: The size of the analysis VM boot disk (in GB).
-    boot_disk_type: URL of the disk type resource describing
-        which disk type to use to create the disk. Use pd-standard for a
-        standard disk and pd-ssd for a SSD disk.
+    boot_disk_type: URL of the disk type resource describing which disk type to
+      use to create the disk. Use pd-standard for a standard disk and pd-ssd for
+      a SSD disk.
     cpu_cores: The number of CPU cores to create the machine with.
-    attach_disks: List of disk names to attach. Default
-        behaviour is to search in zonal disks then regional disks, when using
-        regional disks CreateInstanceFromArguments from GoogleCloudCompute is
-        recommended to avoid name colisions with zonal disks.
-    image_project: Name of the project where the analysis VM
-        image is hosted.
-    image_family: Name of the image to use to create the
-        analysis VM.
+    machine_type: Machine type for the virtual machine. If specified, cpu_cores
+      will be ignored.
+    attach_disks: List of disk names to attach. Default behaviour is to search
+      in zonal disks then regional disks, when using regional disks
+      CreateInstanceFromArguments from GoogleCloudCompute is recommended to
+      avoid name colisions with zonal disks.
+    image_project: Name of the project where the analysis VM image is hosted.
+    image_family: Name of the image to use to create the analysis VM.
     packages: List of extra packages to install in the VM.
 
   Returns:
@@ -178,10 +179,17 @@ def StartAnalysisVm(
       disk = proj.compute.GetRegionDisk(disk_name)
     data_disks.append(disk)
   analysis_vm, created = proj.compute.GetOrCreateAnalysisVm(
-      vm_name, boot_disk_size, disk_type=boot_disk_type, cpu_cores=cpu_cores,
-      image_project=image_project, image_family=image_family,
+      vm_name,
+      boot_disk_size,
+      disk_type=boot_disk_type,
+      cpu_cores=cpu_cores,
+      machine_type=machine_type,
+      image_project=image_project,
+      image_family=image_family,
       packages=packages,
-      data_disks=data_disks, zone=zone)
+      data_disks=data_disks,
+      zone=zone,
+  )
   logger.info('VM started.')
   return analysis_vm, created
 

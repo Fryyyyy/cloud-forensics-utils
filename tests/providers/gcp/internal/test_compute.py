@@ -430,6 +430,24 @@ class GoogleCloudComputeTest(unittest.TestCase):
     mock_create_from_args.assert_not_called()
 
   @typing.no_type_check
+  @mock.patch('libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.GetInstance')
+  @mock.patch('libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.CreateInstanceFromArguments')
+  def testGetOrCreateAnalysisVmWithMachineType(self, mock_create_from_args, mock_get_instance):
+    """Test creating analysis VM with specific machine type."""
+    mock_get_instance.side_effect = errors.ResourceNotFoundError('', __name__)
+    mock_create_from_args.return_value = gcp_mocks.FAKE_ANALYSIS_VM
+
+    vm, created = gcp_mocks.FAKE_ANALYSIS_PROJECT.compute.GetOrCreateAnalysisVm(
+        gcp_mocks.FAKE_ANALYSIS_VM.name, machine_type='custom-machine-type')
+
+    mock_get_instance.assert_called_with(gcp_mocks.FAKE_ANALYSIS_VM.name)
+    self.assertIsInstance(vm, compute.GoogleComputeInstance)
+    self.assertTrue(created)
+    mock_create_from_args.assert_called_once()
+    args, _ = mock_create_from_args.call_args
+    self.assertEqual('custom-machine-type', args[1])
+
+  @typing.no_type_check
   @mock.patch('libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.ListInstanceByLabels')
   @mock.patch('libcloudforensics.providers.gcp.internal.common.GoogleCloudComputeClient.GceApi')
   def testListInstanceByLabels(self, mock_gce_api, mock_labels):
