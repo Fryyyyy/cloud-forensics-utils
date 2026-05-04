@@ -240,6 +240,6 @@ class GoogleComputeBaseResource(common.GoogleCloudComputeClient):
           resource=self.name, project=self.project_id,
           body=request_body).execute()
     if blocking_call:
-      self.BlockOperation(response, zone=self.zone)
+      self.BlockOperation(response, zone=self.zone, region=self.region)
 
     return response
