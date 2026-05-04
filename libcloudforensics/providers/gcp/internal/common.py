@@ -266,7 +266,6 @@ class GoogleCloudComputeClient:
       if zone:
         request = service.zoneOperations().get( # pylint: disable=no-member
             project=self.project_id, zone=zone, operation=response['name'])
-        result = request.execute()  # type: Dict[str, Any]
       elif region:
         request = service.regionOperations().get( # pylint: disable=no-member
             project=self.project_id, region=region, operation=response['name'])
