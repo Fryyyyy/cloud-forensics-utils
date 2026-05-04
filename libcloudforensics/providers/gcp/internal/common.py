@@ -242,17 +242,20 @@ class GoogleCloudComputeClient:
 
   def BlockOperation(
       self, response: Dict[str, Any],
-      zone: Optional[str] = None) -> Dict[str, Any]:
+      zone: Optional[str] = None,
+      region: Optional[str] = None) -> Dict[str, Any]:
     """Block until API operation is finished.
 
     Args:
       response (Dict): GCE API response.
       zone (str): Optional. GCP zone to execute the operation in. None means
           GlobalZone.
+      region (str): Optional. GCP region to execute the operation in.
+          None for zone AND region means GlobalZone.
 
     Returns:
       Dict: Holding the response of a get operation on an API object of type
-          zoneOperations or globalOperations.
+          zoneOperations, regionOperations or globalOperations.
 
     Raises:
       RuntimeError: If API call failed.
@@ -264,10 +267,14 @@ class GoogleCloudComputeClient:
         request = service.zoneOperations().get( # pylint: disable=no-member
             project=self.project_id, zone=zone, operation=response['name'])
         result = request.execute()  # type: Dict[str, Any]
+      elif region:
+        request = service.regionOperations().get( # pylint: disable=no-member
+            project=self.project_id, region=region, operation=response['name'])
       else:
         request = service.globalOperations().get( # pylint: disable=no-member
             project=self.project_id, operation=response['name'])
-        result = request.execute()
+
+      result = request.execute()  # type: Dict[str, Any]
 
       if 'error' in result:
         raise RuntimeError(result['error'])
