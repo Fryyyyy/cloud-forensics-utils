@@ -184,3 +184,76 @@ class GCPForensicsTest(unittest.TestCase):
         gcs_output_folder=f'gs://{dest_bucket_name}/{"/path/to/directory/"}',
         image_format='qcow2',
         output_name=mock_disk_obj.name)
+
+  @typing.no_type_check
+  @mock.patch('libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.InsertFirewallRule')
+  def testMIGNetworkQuarantine_WithParams(self, mock_insert_firewall):
+    """Test MIGNetworkQuarantine when parameters are provided directly."""
+    mock_insert_firewall.return_value = None
+
+    rule_names = forensics.MIGNetworkQuarantine(
+        'fake-project-id',
+        'fake-mig',
+        'fake-zone',
+        network='fake-network',
+        target_tags=['tag1'],
+        target_sas=['sa1@google.com']
+    )
+
+    self.assertEqual(len(rule_names), 2)
+    self.assertTrue(rule_names[0].startswith('quarantine-mig-fake-mig-'))
+    self.assertTrue(rule_names[0].endswith('-ingress'))
+    self.assertTrue(rule_names[1].endswith('-egress'))
+
+    self.assertEqual(mock_insert_firewall.call_count, 2)
+
+    calls = mock_insert_firewall.call_args_list
+    ingress_body = calls[0].kwargs['body']
+    egress_body = calls[1].kwargs['body']
+
+    self.assertEqual(ingress_body['direction'], 'INGRESS')
+    self.assertEqual(egress_body['direction'], 'EGRESS')
+    self.assertEqual(ingress_body['network'], 'fake-network')
+    self.assertEqual(ingress_body['targetTags'], ['tag1'])
+    self.assertEqual(ingress_body['targetServiceAccounts'], ['sa1@google.com'])
+
+  @typing.no_type_check
+  @mock.patch('libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.InsertFirewallRule')
+  @mock.patch('libcloudforensics.providers.gcp.internal.common.GoogleCloudComputeClient.GceApi')
+  def testMigNetworkQuarantine_FetchTemplate(self, mock_gce_api, mock_insert_firewall):
+    """Test MigNetworkQuarantine when it needs to fetch the template."""
+    mock_insert_firewall.return_value = None
+
+    gce_api = mock_gce_api.return_value
+
+    # Mock IGM get
+    mock_igm = {
+        'instanceTemplate': 'https://.../templates/fake-template'
+    }
+    gce_api.instanceGroupManagers.return_value.get.return_value.execute.return_value = mock_igm
+
+    # Mock Template get
+    mock_template = {
+        'properties': {
+            'networkInterfaces': [{'network': 'fake-network-from-template'}],
+            'tags': {'items': ['tag-from-template']},
+            'serviceAccounts': [{'email': 'sa-from-template@google.com'}]
+        }
+    }
+    gce_api.instanceTemplates.return_value.get.return_value.execute.return_value = mock_template
+
+    rule_names = forensics.MIGNetworkQuarantine(
+        'fake-project-id',
+        'fake-mig',
+        'fake-zone'
+    )
+
+    self.assertEqual(len(rule_names), 2)
+    self.assertEqual(mock_insert_firewall.call_count, 2)
+
+    calls = mock_insert_firewall.call_args_list
+    ingress_body = calls[0].kwargs['body']
+
+    self.assertEqual(ingress_body['network'], 'fake-network-from-template')
+    self.assertEqual(ingress_body['targetTags'], ['tag-from-template'])
+    self.assertEqual(ingress_body['targetServiceAccounts'], ['sa-from-template@google.com'])

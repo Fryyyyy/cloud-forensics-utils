@@ -15,6 +15,7 @@
 """Forensics on GCP."""
 
 import base64
+import datetime
 import random
 import re
 import subprocess
@@ -449,6 +450,136 @@ def InstanceNetworkQuarantine(
       # IP address was ephemeral, re-assign ephemeral
       logger.info('Re-assigning ephemeral IP to {0:s}'.format(net_if))
       instance.AssignExternalIp(net_if, None)
+
+def MIGNetworkQuarantine(
+    project_id: str,
+    mig_name: str,
+    location: str,
+    is_regional: bool = False,
+    network: Optional[str] = None,
+    target_tags: Optional[List[str]] = None,
+    target_sas: Optional[List[str]] = None,
+    exempted_src_ips: Optional[List[str]] = None,
+    enable_logging: bool = False) -> List[str]:
+  """Put an entire Managed Instance Group in network quarantine.
+
+  Network quarantine is imposed via applying deny-all
+  firewall rules targeting the service accounts and tags of the MIG.
+  If network is not provided, the MIG's instance template is queried to find 
+  the network, tags, and service accounts.
+
+  Args:
+    project_id (str): Google Cloud Project ID.
+    mig_name (str): The name of the Managed Instance Group.
+    location (str): The zone or region of the MIG.
+    is_regional (bool): Optional. True if the MIG is regional. Default is False.
+    network (str): Optional. The network to apply rules in. If not provided,
+        it is fetched from the instance template.
+    target_tags (List[str]): Optional. List of tags to target. If not provided,
+        they are fetched from the instance template.
+    target_sas (List[str]): Optional. List of service accounts to target. If not 
+        provided, they are fetched from the instance template.
+    exempted_src_ips (List[str]): Optional. List of IPs exempted from the
+        deny-all ingress firewall rules, ex: analyst IPs.
+    enable_logging (bool): Optional. Enable firewall logging.
+        Default is False.
+
+  Returns:
+    List[str]: The names of the created firewall rules.
+
+  Raises:
+    OperationFailedError: If the MIG or template cannot be retrieved when
+        needed, or if the MIG has no tags or service accounts to target.
+  """
+  logger.info(
+      'Putting MIG "{0:s}" in project {1:s} in network quarantine.'.format(
+          mig_name, project_id))
+  project = gcp_project.GoogleCloudProject(project_id)
+  gce_api = project.compute.GceApi()
+
+  if is_regional:
+    igm_api = gce_api.regionInstanceGroupManagers() # pylint: disable=no-member
+    location_params = {'region': location}
+  else:
+    igm_api = gce_api.instanceGroupManagers() # pylint: disable=no-member
+    location_params = {'zone': location}
+
+  if not network:
+    try:
+      igm = igm_api.get(
+          project=project_id, instanceGroupManager=mig_name,
+          **location_params).execute()
+      template_url = igm['instanceTemplate']
+      template_name = template_url.split('/')[-1]
+
+      if '/regions/' in template_url:
+        parts = template_url.split('/')
+        region = parts[-3]
+        template = gce_api.regionInstanceTemplates().get(
+            project=project_id, region=region, instanceTemplate=template_name).execute()
+      else:
+        template = gce_api.instanceTemplates().get(
+            project=project_id, instanceTemplate=template_name).execute()
+      properties = template['properties']
+
+      network = properties['networkInterfaces'][0]['network']
+      if target_tags is None:
+        target_tags = properties.get('tags', {}).get('items', [])
+      if target_sas is None:
+        target_sas = [
+            sa['email'] for sa in properties.get('serviceAccounts', [])
+        ]
+    except HttpError as exception:
+      raise errors.OperationFailedError(
+          'Failed to get MIG or template: {0:s}'.format(str(exception)),
+          __name__) from exception
+  else:
+    if target_tags is None:
+      target_tags = []
+    if target_sas is None:
+      target_sas = []
+
+  if not target_sas and not target_tags:
+    raise errors.OperationFailedError(
+        'Cannot quarantine MIG {0:s} because it has no service accounts or'
+        ' tags.'.format(mig_name),
+        __name__,
+    )
+
+  ts = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H%M%S')
+  rule_base_name = 'quarantine-mig-{0:s}-{1:s}'.format(mig_name[:30], ts)
+
+  created_rules = []
+  for direction in ['INGRESS', 'EGRESS']:
+    rule_name = '{0:s}-{1:s}'.format(rule_base_name, direction.lower())
+    body = {
+        'name': rule_name,
+        'network': network,
+        'direction': direction,
+        'priority': 0,
+        'denied': [{'IPProtocol': 'all'}],
+        'description': 'Quarantine {0:s} for MIG {1:s}'.format(
+            direction, mig_name
+        ),
+        'logConfig': {
+            'enable': enable_logging
+        }
+    }
+    if direction == 'INGRESS':
+      body['sourceRanges'] = common.GenerateSourceRange(exempted_src_ips)
+    else:
+      body['destinationRanges'] = ['0.0.0.0/0']
+
+    if target_sas:
+      body['targetServiceAccounts'] = target_sas
+    if target_tags:
+      body['targetTags'] = target_tags
+
+    project.compute.InsertFirewallRule(body=body)
+    logger.info('Created {0:s} rule: {1:s}'.format(direction, rule_name))
+    created_rules.append(rule_name)
+
+  return created_rules
 
 
 def VMRemoveServiceAccount(

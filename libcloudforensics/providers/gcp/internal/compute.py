@@ -1497,7 +1497,10 @@ class GoogleCloudCompute(common.GoogleCloudComputeClient):
 
     logger.info(
         'Inserting firewall rule {0:s}, '
-        'targeting tags: {1!s}.'.format(body['name'], body['targetTags']))
+        'targeting tags: {1!s}, service accounts: {2!s}.'.format(
+            body['name'],
+            body.get('targetTags', []),
+            body.get('targetServiceAccounts', [])))
     firewall_client = self.GceApi().firewalls() # pylint: disable=no-member
     request = firewall_client.insert(project=self.project_id, body=body)
     response = request.execute()
