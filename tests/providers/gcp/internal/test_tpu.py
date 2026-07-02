@@ -27,9 +27,11 @@ from tests.providers.gcp import gcp_mocks
 
 class GoogleCloudTpuTest(unittest.TestCase):
   """Test Google Cloud TPU class."""
+  # pylint: disable=line-too-long
 
   @typing.no_type_check
-  @mock.patch('libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.TPUApi')
+  @mock.patch(
+      'libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.TPUApi')
   def testGetNode(self, mock_tpu_api):
     """Test GetNode operation."""
     nodes = mock_tpu_api.return_value.projects.return_value.locations.return_value.nodes
@@ -49,7 +51,8 @@ class GoogleCloudTpuTest(unittest.TestCase):
 
   @typing.no_type_check
   @mock.patch('libcloudforensics.providers.gcp.internal.common.ExecuteRequest')
-  @mock.patch('libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.TpuApi')
+  @mock.patch(
+      'libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.TPUApi')
   def testListNodes(self, mock_tpu_api, mock_execute_request):
     """Test ListNodes operation."""
     nodes = mock_tpu_api.return_value.projects.return_value.locations.return_value.nodes
@@ -64,7 +67,8 @@ class GoogleCloudTpuTest(unittest.TestCase):
 
   @typing.no_type_check
   @mock.patch('libcloudforensics.providers.gcp.internal.common.ExecuteRequest')
-  @mock.patch('libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.TPUApi')
+  @mock.patch(
+      'libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.TPUApi')
   def testListLocations(self, mock_tpu_api, mock_execute_request):
     """Test ListLocations operation."""
     locations = mock_tpu_api.return_value.projects.return_value.locations
@@ -78,8 +82,11 @@ class GoogleCloudTpuTest(unittest.TestCase):
         {'name': 'projects/fake-target-project'})
 
   @typing.no_type_check
-  @mock.patch('libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.ListLocations')
-  @mock.patch('libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.GetNode')
+  @mock.patch(
+      'libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.ListLocations'
+  )
+  @mock.patch(
+      'libcloudforensics.providers.gcp.internal.tpu.GoogleCloudTPU.GetNode')
   def testFindNode(self, mock_get_node, mock_list_locations):
     """Test FindNode operation."""
     mock_list_locations.return_value = ['zone-1', 'zone-2']
@@ -103,9 +110,12 @@ class GoogleCloudTpuTest(unittest.TestCase):
 
 class GoogleCloudTpuNodeTest(unittest.TestCase):
   """Test Google Cloud TPU Node class."""
+  # pylint: disable=line-too-long
 
   @typing.no_type_check
-  @mock.patch('libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.GetDisk')
+  @mock.patch(
+      'libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.GetDisk'
+  )
   def testGetBootDisk(self, mock_get_disk):
     """Test GetBootDisk operation."""
     node = gcp_tpu.GoogleCloudTPUNode(
@@ -124,7 +134,9 @@ class GoogleCloudTpuNodeTest(unittest.TestCase):
     self.assertIsNone(node_no_boot.GetBootDisk())
 
   @typing.no_type_check
-  @mock.patch('libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.GetDisk')
+  @mock.patch(
+      'libcloudforensics.providers.gcp.internal.compute.GoogleCloudCompute.GetDisk'
+  )
   def testListDisks(self, mock_get_disk):
     """Test ListDisks operation."""
     node = gcp_tpu.GoogleCloudTPUNode(

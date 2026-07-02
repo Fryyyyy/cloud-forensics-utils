@@ -508,7 +508,8 @@ def MIGNetworkQuarantine(
     template_url = igm.get('instanceTemplate')
     if not template_url:
       raise errors.OperationFailedError(
-          'MIG {0:s} does not have an instanceTemplate defined.'.format(mig_name),
+          'MIG {0:s} does not have an instanceTemplate defined.'.format(
+              mig_name),
           __name__)
 
     template_name = template_url.split('/')[-1]
@@ -518,9 +519,10 @@ def MIGNetworkQuarantine(
       parts = template_url.split('/')
       if len(parts) < 3:
         raise errors.OperationFailedError(
-            'URL "{0:s}" is too short to contain a region.'.format(template_url),
+            'URL "{0:s}" is too short to contain a region.'.format(
+                template_url),
             __name__)
-            
+
       region = parts[-3]
       template = (
           gce_api.regionInstanceTemplates()  # pylint: disable=no-member
@@ -587,12 +589,10 @@ def MIGNetworkQuarantine(
       project.compute.BlockOperation(op)
 
     new_template_url = 'https://www.googleapis.com/compute/v1/projects/{0:s}/global/instanceTemplates/{1:s}'.format(
-        project_id, new_template_name
-    )
+        project_id, new_template_name)
     if region:
       new_template_url = 'https://www.googleapis.com/compute/v1/projects/{0:s}/regions/{1:s}/instanceTemplates/{2:s}'.format(
-          project_id, region, new_template_name
-      )
+          project_id, region, new_template_name)
 
     body = {'instanceTemplate': new_template_url}
     op = igm_api.setInstanceTemplate(

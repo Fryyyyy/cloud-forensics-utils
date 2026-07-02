@@ -79,7 +79,8 @@ class GoogleCloudTPUNode:
       return compute_module.GoogleCloudCompute(disk_project).GetDisk(
           disk_name=disk_name, zone=disk_zone)
     except IndexError:
-      logger.warning(f'Could not parse boot disk source: {source_disk}')
+      logger.warning(
+          f'Could not parse boot disk source: {0:s}'.format(source_disk))
       return None
 
   def ListDisks(self) -> Dict[str, compute_module.GoogleComputeDisk]:
@@ -104,7 +105,8 @@ class GoogleCloudTPUNode:
             disk_project
         ).GetDisk(disk_name=disk_name, zone=disk_zone)
       except IndexError:
-        logger.warning(f'Could not parse data disk source: {source_disk}')
+        logger.warning(
+            'Could not parse data disk source: {0:s}'.format(source_disk))
         continue
     return disks
 
@@ -151,6 +153,7 @@ class GoogleCloudTPU:
 
     Raises:
       ResourceNotFoundError: If the TPU node does not exist.
+      HttpError: If the request to the TPU API fails for any other reason.
     """
     client = self.TPUApi().projects().locations().nodes() # pylint: disable=no-member
     name = f'projects/{self.project_id}/locations/{location}/nodes/{node_name}'
@@ -187,7 +190,7 @@ class GoogleCloudTPU:
               self.project_id, location, node_name, node_dict))
       return nodes
     except HttpError as e:
-      logger.warning(f'Failed to list nodes in {location}: {e}')
+      logger.warning('Failed to list nodes in {0}: {1}'.format(location, e))
       return []
 
   def ListLocations(self) -> List[str]:
@@ -206,10 +209,12 @@ class GoogleCloudTPU:
           locations.append(loc['locationId'])
       return locations
     except HttpError as e:
-      logger.error(f'Failed to list locations: {e}')
+      logger.error('Failed to list locations: {0}'.format(e))
       raise
 
-  def FindNode(self, node_name: str, location: Optional[str] = None) -> GoogleCloudTPUNode:
+  def FindNode(
+      self, node_name: str, location: Optional[str] = None
+  ) -> GoogleCloudTPUNode:
     """Find a TPU node by name, optionally specifying location.
 
     Args:
@@ -232,5 +237,7 @@ class GoogleCloudTPU:
       except errors.ResourceNotFoundError:
         continue
     raise errors.ResourceNotFoundError(
-        f'TPU Node {node_name} was not found in any location in project {self.project_id}',
-        __name__)
+        f'TPU Node {node_name} was not found in any location in project'
+        f' {self.project_id}',
+        __name__,
+    )
