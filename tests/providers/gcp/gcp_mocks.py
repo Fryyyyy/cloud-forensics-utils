@@ -28,6 +28,7 @@ from libcloudforensics.providers.gcp.internal import cloudsql as gcp_cloudsql
 from libcloudforensics.providers.gcp.internal import cloudresourcemanager as gcp_resourcemanager
 from libcloudforensics.providers.gcp.internal import serviceusage as gcp_serviceusage
 from libcloudforensics.providers.gcp.internal import bigquery as gcp_bigquery
+from libcloudforensics.providers.gcp.internal import tpu as gcp_tpu
 # pylint: enable=line-too-long
 
 FAKE_ANALYSIS_PROJECT = gcp_project.GoogleCloudProject(
@@ -117,6 +118,7 @@ FAKE_CLOUDSQLINSTANCE = gcp_cloudsql.GoogleCloudSQL('fake-target-project')
 FAKE_CLOUD_RESOURCE_MANAGER = gcp_resourcemanager.GoogleCloudResourceManager('fake-project')
 FAKE_SERVICE_USAGE = gcp_serviceusage.GoogleServiceUsage('fake-project')
 FAKE_BIGQUERY = gcp_bigquery.GoogleBigQuery('fake-target-project')
+FAKE_TPU = gcp_tpu.GoogleCloudTPU('fake-target-project')
 # pylint: enable=line-too-long
 
 # Mock struct to mimic GCP's API responses
@@ -1133,5 +1135,29 @@ MOCK_ORG_POLICIES = {
     'policies': [
         {'constraint': 'constraints/compute.requireShieldedVm', 'etag': 'abcdefghijk', 'updateTime': '2024-12-02T03:38:34.276794Z', 'booleanPolicy': {}},
         {'constraint': 'constraints/compute.storageResourceUseRestrictions', 'etag': 'abcdefghijk', 'updateTime': '2024-12-06T02:01:04.737315Z', 'listPolicy': {'allValues': 'ALLOW'}},
+    ]
+}
+
+MOCK_TPU_NODE = {
+    'name': 'projects/fake-target-project/locations/fake-zone/nodes/fake-tpu',
+    'state': 'READY',
+    'bootDisk': {
+        'sourceDisk': 'projects/fake-target-project/zones/fake-zone/disks/fake-tpu-boot-disk'
+    },
+    'dataDisks': [
+        {
+            'sourceDisk': 'projects/fake-target-project/zones/fake-zone/disks/fake-tpu-data-disk'
+        }
+    ],
+    'labels': {'key': 'value'}
+}
+
+MOCK_TPU_NODES_LIST = {
+    'nodes': [MOCK_TPU_NODE]
+}
+
+MOCK_TPU_LOCATIONS = {
+    'locations': [
+        {'locationId': 'fake-zone'}
     ]
 }

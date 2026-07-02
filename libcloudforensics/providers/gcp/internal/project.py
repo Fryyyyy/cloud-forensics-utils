@@ -34,6 +34,7 @@ import libcloudforensics.providers.gcp.internal.cloudresourcemanager\
 import libcloudforensics.providers.gcp.internal.serviceusage\
   as serviceusage_module
 import libcloudforensics.providers.gcp.internal.bigquery as bigquery_module
+import libcloudforensics.providers.gcp.internal.tpu as tpu_module
 
 class GoogleCloudProject:
   """Class representing a Google Cloud Project.
@@ -88,6 +89,7 @@ class GoogleCloudProject:
     self._serviceusage = None  # type: Optional[serviceusage_module.GoogleServiceUsage]
     # pylint: enable=line-too-long
     self._bigquery = None  # type: Optional[bigquery_module.GoogleBigQuery]
+    self._tpu = None  # type: Optional[tpu_module.GoogleCloudTpu]
 
 
   def Delete(self) -> Dict[str, Any]:
@@ -271,3 +273,16 @@ class GoogleCloudProject:
       self.project_id
     )
     return self._bigquery
+
+  @property
+  def tpu(self) -> tpu_module.GoogleCloudTPU:
+    """Get a GoogleCloudTPU object for the project.
+
+    Returns:
+      GoogleCloudTPU: Object that represents Google Cloud TPU.
+    """
+
+    if self._tpu:
+      return self._tpu
+    self._tpu = tpu_module.GoogleCloudTPU(self.project_id)
+    return self._tpu
