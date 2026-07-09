@@ -453,14 +453,16 @@ def InstanceNetworkQuarantine(
 
 
 def _GetMigLocation(
-    project: 'gcp_project.GoogleCloudProject', mig_name: str
+    project: 'gcp_project.GoogleCloudProject',
+    mig_name: str,
+    location: Optional[str] = None,
 ) -> Tuple[str, bool]:
-  """Automatically detect the location and region/zone type
-      of a Managed Instance Group.
+  """Automatically detect the location and region/zone type of a MIG.
 
   Args:
     project (gcp_project.GoogleCloudProject): The GCP project object.
     mig_name (str): The name of the Managed Instance Group.
+    location (str): Optional. The zone or region to filter by.
 
   Returns:
     Tuple[str, bool]: A tuple containing the location (zone or region name) and
@@ -468,39 +470,67 @@ def _GetMigLocation(
 
   Raises:
     errors.ResourceNotFoundError: If the MIG cannot be found.
+    errors.OperationFailedError: If multiple MIGs are found and location is
+      ambiguous.
   """
   gce_api = project.compute.GceApi()
   filter_str = 'name = "{0:s}"'.format(mig_name)
   request = gce_api.instanceGroupManagers().aggregatedList(
       project=project.project_id, filter=filter_str
   )
+  found_migs = []
   while request:
     response = request.execute()
     for scoped_list in response.get('items', {}).values():
       migs = scoped_list.get('instanceGroupManagers', [])
       for mig in migs:
         if mig['name'] == mig_name:
-          if 'zone' in mig:
-            location = mig['zone'].split('/')[-1]
-            return location, False
-          elif 'region' in mig:
-            location = mig['region'].split('/')[-1]
-            return location, True
+          mig_loc = mig.get('zone', mig.get('region', '')).split('/')[-1]
+          if location and mig_loc != location:
+            continue
+          found_migs.append(mig)
     request = gce_api.instanceGroupManagers().aggregatedList_next(
         previous_request=request, previous_response=response
     )
 
+  if not found_migs:
+    raise errors.ResourceNotFoundError(
+        'MIG {0:s} was not found in project {1:s}'.format(
+            mig_name, project.project_id
+        ),
+        __name__,
+    )
+
+  if len(found_migs) > 1:
+    locations = []
+    for mig in found_migs:
+      loc = mig.get('zone', mig.get('region', '')).split('/')[-1]
+      locations.append(loc)
+    raise errors.OperationFailedError(
+        'Multiple MIGs named {0:s} found in locations: {1:s}. '
+        'Ambiguous target. Please specify location.'.format(
+            mig_name, str(locations)
+        ),
+        __name__,
+    )
+
+  mig = found_migs[0]
+  if 'zone' in mig:
+    mig_location = mig['zone'].split('/')[-1]
+    return mig_location, False
+  elif 'region' in mig:
+    mig_location = mig['region'].split('/')[-1]
+    return mig_location, True
+
   raise errors.ResourceNotFoundError(
-      'MIG {0:s} was not found in project {1:s}'.format(
-          mig_name, project.project_id
-      ),
-      __name__,
+      'MIG {0:s} location could not be determined'.format(mig_name), __name__
   )
 
 
 def MIGNetworkQuarantine(
     project_id: str,
     mig_name: str,
+    location: Optional[str] = None,
     exempted_src_ips: Optional[List[str]] = None,
     enable_logging: bool = False,
 ) -> List[str]:
@@ -514,6 +544,7 @@ def MIGNetworkQuarantine(
   Args:
     project_id (str): Google Cloud Project ID.
     mig_name (str): The name of the Managed Instance Group.
+    location (str): Optional. The zone or region of the MIG.
     exempted_src_ips (List[str]): Optional. List of IPs exempted from the
       deny-all ingress firewall rules, ex: analyst IPs.
     enable_logging (bool): Optional. Enable firewall logging. Default is False.
@@ -523,7 +554,7 @@ def MIGNetworkQuarantine(
 
   Raises:
     OperationFailedError: If the MIG or template cannot be retrieved, or if
-    operation fails.
+      operation fails.
   """
   logger.info(
       'Putting MIG "{0:s}" in project {1:s} in network quarantine.'.format(
@@ -533,7 +564,7 @@ def MIGNetworkQuarantine(
   project = gcp_project.GoogleCloudProject(project_id)
   gce_api = project.compute.GceApi()
 
-  location, is_regional = _GetMigLocation(project, mig_name)
+  location, is_regional = _GetMigLocation(project, mig_name, location=location)
 
   if is_regional:
     igm_api = gce_api.regionInstanceGroupManagers()
@@ -596,7 +627,16 @@ def MIGNetworkQuarantine(
     new_template_name = 'quarantine-{0:s}-{1:s}'.format(
         template_name[:30], ts[:10]
     )
-    new_template_body = {'name': new_template_name, 'properties': properties}
+    description = (
+        'Quarantine template for {0:s}. Original template: {1:s}'.format(
+            mig_name, template_url
+        )
+    )
+    new_template_body = {
+        'name': new_template_name,
+        'properties': properties,
+        'description': description,
+    }
     logger.info('Creating new template: {0:s}'.format(new_template_name))
 
     if region:
@@ -710,16 +750,18 @@ def MIGNetworkQuarantine(
 def MIGNetworkUnQuarantine(
     project_id: str,
     mig_name: str,
+    location: Optional[str] = None,
     quarantine_tag: Optional[str] = None,
 ) -> List[str]:
   """Undo network quarantine for a Managed Instance Group.
 
   This removes the firewall rules and removes the quarantine tags from
-  instances.
+  instances. It also restores the MIG's original instance template if possible.
 
   Args:
     project_id (str): Google Cloud Project ID.
     mig_name (str): The name of the Managed Instance Group.
+    location (str): Optional. The zone or region of the MIG.
     quarantine_tag (str): Optional. The tag used to quarantine the MIG. If not
       provided, it is discovered from the MIG's template.
 
@@ -734,17 +776,29 @@ def MIGNetworkUnQuarantine(
   project = gcp_project.GoogleCloudProject(project_id)
   gce_api = project.compute.GceApi()
 
-  location, is_regional = _GetMigLocation(project, mig_name)
+  location_params = {}
+  is_regional = False
+  try:
+    location, is_regional = _GetMigLocation(project, mig_name, location=location)
+    if is_regional:
+      igm_api = gce_api.regionInstanceGroupManagers()
+      location_params = {'region': location}
+    else:
+      igm_api = gce_api.instanceGroupManagers()
+      location_params = {'zone': location}
+  except (errors.ResourceNotFoundError, errors.OperationFailedError) as e:
+    logger.warning('Could not determine MIG location: {0:s}'.format(str(e)))
+    if not quarantine_tag:
+      raise errors.OperationFailedError(
+          'MIG location could not be determined and no quarantine_tag was '
+          'provided. Cannot proceed.', __name__
+      ) from e
+    igm_api = None
 
-  if is_regional:
-    igm_api = gce_api.regionInstanceGroupManagers()
-    location_params = {'region': location}
-  else:
-    igm_api = gce_api.instanceGroupManagers()
-    location_params = {'zone': location}
+  original_template_url = None
 
-  # 1. Discover tag if not provided
-  if not quarantine_tag:
+  # 1. Discover tag and original template if IGM is accessible
+  if igm_api:
     try:
       igm = igm_api.get(
           project=project_id, instanceGroupManager=mig_name, **location_params
@@ -773,14 +827,23 @@ def MIGNetworkUnQuarantine(
         )
 
       properties = template['properties']
-      tags = properties.get('tags', {}).get('items', [])
-      for tag in tags:
-        if tag.startswith('quarantine-mig-'):
-          quarantine_tag = tag
-          break
+
+      if not quarantine_tag:
+        tags = properties.get('tags', {}).get('items', [])
+        for tag in tags:
+          if tag.startswith('quarantine-mig-'):
+            quarantine_tag = tag
+            break
+
+      # Discover original template from description
+      description = template.get('description', '')
+      match = re.search(r'Original template: (\S+)', description)
+      if match:
+        original_template_url = match.group(1)
+
     except HttpError as exception:
       logger.warning(
-          'Failed to discover tag from template: {0:s}'.format(str(exception))
+          'Failed to retrieve MIG or template details: {0:s}'.format(str(exception))
       )
 
   if not quarantine_tag:
@@ -790,84 +853,121 @@ def MIGNetworkUnQuarantine(
         __name__,
     )
 
-  # 2. Derive rule base name
+  # 2. Restore original template if found
+  if igm_api and original_template_url:
+    try:
+      logger.info('Restoring original template: {0:s}'.format(original_template_url))
+      body = {'instanceTemplate': original_template_url}
+      op = igm_api.setInstanceTemplate(
+          project=project_id,
+          instanceGroupManager=mig_name,
+          body=body,
+          **location_params,
+      ).execute()
+      project.compute.BlockOperation(
+          op,
+          zone=location_params.get('zone'),
+          region=location_params.get('region'),
+      )
+    except HttpError as exception:
+      logger.warning(
+          'Failed to restore original template: {0:s}'.format(str(exception))
+      )
+
+  # 3. Delete firewall rules by listing and matching
   parts = quarantine_tag.split('-')
   ts = parts[-1]
   ts_prefix = ts[:10]
-  rule_base_name = 'quarantine-mig-{0:s}-{1:s}'.format(mig_name[:30], ts_prefix)
 
   deleted_rules = []
   firewall_client = gce_api.firewalls()
 
-  # 3. Delete firewall rules
-  for direction in ['ingress', 'egress']:
-    rule_name = '{0:s}-{1:s}'.format(rule_base_name, direction)
-    try:
-      request = firewall_client.delete(project=project_id, firewall=rule_name)
-      response = request.execute()
-      project.compute.BlockOperation(response)
-      logger.info('Deleted firewall rule: {0:s}'.format(rule_name))
-      deleted_rules.append(rule_name)
-    except HttpError as exception:
-      if exception.resp.status == 404:
-        logger.warning(
-            'Firewall rule {0:s} not found, skipping.'.format(rule_name)
-        )
-      else:
+  try:
+    firewalls = firewall_client.list(project=project_id).execute()
+    rules_to_delete = []
+    prefix = 'q-mig-{0:s}-'.format(mig_name[:15])
+    suffix_ingress = '-{0:s}-ingress'.format(ts_prefix)
+    suffix_egress = '-{0:s}-egress'.format(ts_prefix)
+
+    # Also support old naming convention just in case
+    old_prefix = 'quarantine-mig-{0:s}-'.format(mig_name[:30])
+
+    for rule in firewalls.get('items', []):
+      name = rule['name']
+      is_new_name = name.startswith(prefix) and (
+          name.endswith(suffix_ingress) or name.endswith(suffix_egress)
+      )
+      is_old_name = name.startswith(old_prefix) and (
+          name.endswith(suffix_ingress) or name.endswith(suffix_egress)
+      )
+      if is_new_name or is_old_name:
+        rules_to_delete.append(name)
+
+    for rule_name in rules_to_delete:
+      try:
+        request = firewall_client.delete(project=project_id, firewall=rule_name)
+        response = request.execute()
+        project.compute.BlockOperation(response)
+        logger.info('Deleted firewall rule: {0:s}'.format(rule_name))
+        deleted_rules.append(rule_name)
+      except HttpError as exception:
         logger.warning(
             'Failed to delete firewall rule {0:s}: {1:s}'.format(
                 rule_name, str(exception)
             )
         )
+  except HttpError as exception:
+    logger.warning('Failed to list firewall rules: {0:s}'.format(str(exception)))
 
   # 4. Remove tag from existing instances
-  try:
-    response = igm_api.listManagedInstances(
-        project=project_id, instanceGroupManager=mig_name, **location_params
-    ).execute()
-    managed_instances = response.get('managedInstances', [])
+  if igm_api:
+    try:
+      response = igm_api.listManagedInstances(
+          project=project_id, instanceGroupManager=mig_name, **location_params
+      ).execute()
+      managed_instances = response.get('managedInstances', [])
 
-    for item in managed_instances:
-      instance_url = item['instance']
-      instance_name = instance_url.split('/')[-1]
-      parts = instance_url.split('/')
-      zone = parts[-3]
-      try:
-        instance = project.compute.GetInstance(instance_name, zone=zone)
-        get_operation = instance.GetOperation()
-        tags_dict = get_operation['tags']
-        existing_tags = tags_dict.get('items', [])
-        tags_fingerprint = tags_dict['fingerprint']
+      for item in managed_instances:
+        instance_url = item['instance']
+        instance_name = instance_url.split('/')[-1]
+        parts = instance_url.split('/')
+        zone = parts[-3]
+        try:
+          instance = project.compute.GetInstance(instance_name, zone=zone)
+          get_operation = instance.GetOperation()
+          tags_dict = get_operation['tags']
+          existing_tags = tags_dict.get('items', [])
+          tags_fingerprint = tags_dict['fingerprint']
 
-        if quarantine_tag in existing_tags:
-          new_tags = [t for t in existing_tags if t != quarantine_tag]
-          request_body = {
-              'fingerprint': tags_fingerprint,
-              'items': new_tags,
-          }
-          gce_api.instances().setTags(
-              project=project_id,
-              zone=zone,
-              instance=instance_name,
-              body=request_body,
-          ).execute()
-          logger.info(
-              'Removed tag {0:s} from instance {1:s}'.format(
-                  quarantine_tag, instance_name
+          if quarantine_tag in existing_tags:
+            new_tags = [t for t in existing_tags if t != quarantine_tag]
+            request_body = {
+                'fingerprint': tags_fingerprint,
+                'items': new_tags,
+            }
+            gce_api.instances().setTags(
+                project=project_id,
+                zone=zone,
+                instance=instance_name,
+                body=request_body,
+            ).execute()
+            logger.info(
+                'Removed tag {0:s} from instance {1:s}'.format(
+                    quarantine_tag, instance_name
+                )
+            )
+        except errors.ResourceNotFoundError:
+          pass
+        except HttpError as exception:
+          logger.warning(
+              'Failed to remove tag from instance {0:s}: {1:s}'.format(
+                  instance_name, str(exception)
               )
           )
-      except errors.ResourceNotFoundError:
-        pass
-      except HttpError as exception:
-        logger.warning(
-            'Failed to remove tag from instance {0:s}: {1:s}'.format(
-                instance_name, str(exception)
-            )
-        )
-  except HttpError as exception:
-    logger.warning(
-        'Failed to list instances to remove tags: {0:s}'.format(str(exception))
-    )
+    except HttpError as exception:
+      logger.warning(
+          'Failed to list instances to remove tags: {0:s}'.format(str(exception))
+      )
 
   return deleted_rules
 
